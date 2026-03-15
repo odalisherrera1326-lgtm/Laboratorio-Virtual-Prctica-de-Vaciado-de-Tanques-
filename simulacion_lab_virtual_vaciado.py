@@ -1,91 +1,86 @@
-import numpy as np
-import IPython.display as display
-from matplotlib import pyplot as plt
-import io
-import base64
-
-ys = 200 + np.random.randn(100)
-x = [x for x in range(len(ys))]
-
-fig = plt.figure(figsize=(4, 3), facecolor='w')
-plt.plot(x, ys, '-')
-plt.fill_between(x, ys, 195, where=(ys > 195), facecolor='g', alpha=0.6)
-plt.title("Sample Visualization", fontsize=10)
-
-data = io.BytesIO()
-plt.savefig(data)
-image = F"data:image/png;base64,{base64.b64encode(data.getvalue()).decode()}"
-alt = "Sample Visualization"
-display.display(display.Markdown(F"""![{alt}]({image})"""))
-plt.close(fig)
-
-
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+import pandas as pd
 
-# Configuración de la página
+# 1. Configuración de la interfaz profesional
 st.set_page_config(page_title="Simulador LOU - UCV", layout="wide")
 
-st.title("Práctica Virtual: Laboratorio de Operaciones Unitarias - UCV")
-st.markdown("---")
+st.title("🎛️ Simulador Virtual: Vaciado y Llenado de Tanques")
+st.markdown("### Laboratorio de Operaciones Unitarias - Escuela de Ingeniería Química - UCV")
+st.write("Esta herramienta permite simular la dinámica de niveles basada en modelos matemáticos validados.")
 
-# --- BARRA LATERAL (ENTRADAS) ---
-st.sidebar.header("Parámetros del Sistema")
+# 2. Entradas en la barra lateral
+st.sidebar.header("Panel de Control")
 
-# Dimensiones reales del tanque (Tabla 4 y 5)
+modo = st.sidebar.selectbox("Seleccione el Proceso", ["Vaciado de Tanque", "Llenado de Tanque"])
+
+# Parámetros físicos del tanque real del LOU
 diametro = st.sidebar.number_input("Diámetro del Tanque (m)", value=0.503, format="%.3f")
 area_tanque = np.pi * (diametro / 2)**2
 
-modo = st.sidebar.radio("Seleccione el proceso:", ["Vaciado", "Llenado"])
-
-if modo == "Vaciado":
+if modo == "Vaciado de Tanque":
     st.sidebar.subheader("Configuración de Vaciado")
-    h0 = st.sidebar.slider("Nivel Inicial (m)", 0.0, 0.40, 0.35)
-    # Constante K identificada en tus pruebas de MATLAB
-    k_vaciado = st.sidebar.number_input("Constante K de Salida", value=0.000295, format="%.6f")
-    t_final = st.sidebar.number_input("Tiempo de simulación (s)", value=1000)
-
+    h0 = st.sidebar.slider("Nivel Inicial (m)", 0.0, 0.45, 0.35)
+    k_vaciado = st.sidebar.number_input("Constante de Salida (K)", value=0.000295, format="%.6f")
+    t_sim = st.sidebar.slider("Tiempo de Simulación (s)", 100, 2000, 1000)
 else:
     st.sidebar.subheader("Configuración de Llenado")
-    # Entrada según la plomada del rotámetro
-    altura_plomada = st.sidebar.number_input("Altura de Plomada (cm)", value=4.0, step=0.5)
-
-    # Ecuación de calibración: y = 39.739x + 106.9 (Caudal en L/h)
-    q_lh = 39.739 * altura_plomada + 106.9
-    q_alim = (q_lh / 1000) / 3600  # Conversión a m3/s
-
+    h0 = 0.0
+    # Tu ecuación de calibración: y = 39.739x + 106.9
+    lectura_rotametro = st.sidebar.number_input("Lectura del Rotámetro (cm)", value=4.0, step=0.5)
+    q_lh = 39.739 * lectura_rotametro + 106.9
+    q_alim = (q_lh / 1000) / 3600  # Conversión L/h a m3/s
+    t_sim = st.sidebar.slider("Tiempo de Simulación (s)", 100, 2000, 1000)
     st.sidebar.info(f"Caudal calculado: {q_lh:.2f} L/h")
 
-# --- LÓGICA DE SIMULACIÓN ---
-if st.button("Ejecutar Simulación"):
-    t_eval = np.linspace(0, 1000, 100)
+# 3. Ejecución de la Simulación
+if st.button("🚀 Ejecutar Simulación"):
+    t_eval = np.linspace(0, t_sim, 100)
 
-    if modo == "Vaciado":
-        # EDO: dh/dt = -K*sqrt(h) / Area
-        def edo_vaciado(t, h):
+    if modo == "Vaciado de Tanque":
+        # dh/dt = -K*sqrt(h) / A
+        def modelo(t, h):
             return -k_vaciado * np.sqrt(max(0, h)) / area_tanque
-
-        sol = solve_ivp(edo_vaciado, [0, t_final], [h0], t_eval=t_eval)
-        t_plot, h_plot = sol.t, sol.y[0]
-
+        sol = solve_ivp(modelo, [0, t_sim], [h0], t_eval=t_eval)
+        h_res = sol.y[0]
     else:
-        # Modelo de llenado: h(t) = h0 + (Qalim/Area)*t
-        h_plot = 0 + (q_alim / area_tanque) * t_eval
-        t_plot = t_eval
+        # h(t) = h0 + (Qin/A)*t
+        h_res = h0 + (q_alim / area_tanque) * t_eval
 
-    # --- GRÁFICA ---
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(t_plot, h_plot, 'b-', linewidth=2, label=f"Modelo de {modo}")
-    ax.set_xlabel("Tiempo (s)")
-    ax.set_ylabel("Nivel (m)")
-    ax.set_title(f"Dinámica del Tanque - Proceso de {modo}")
-    ax.grid(True, linestyle='--')
-    ax.legend()
+    # Crear DataFrame para resultados
+    df_resultados = pd.DataFrame({
+        "Tiempo (s)": t_eval,
+        "Nivel Simulado (m)": h_res
+    })
 
-    st.pyplot(fig)
+    # 4. Visualización
+    col1, col2 = st.columns([2, 1])
 
-    # Mostrar datos en tabla
-    df_resultados = {"Tiempo (s)": t_plot, "Nivel (m)": h_plot}
-    st.dataframe(df_resultados)
+    with col1:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(t_eval, h_res, color='#007bff', linewidth=2, label=f"Modelo de {modo}")
+        ax.set_xlabel("Tiempo (s)")
+        ax.set_ylabel("Nivel (m)")
+        ax.set_title(f"Perfil de Nivel vs Tiempo - {modo}")
+        ax.grid(True, linestyle='--')
+        ax.legend()
+        st.pyplot(fig)
+
+    with col2:
+        st.subheader("Resultados Numéricos")
+        st.metric("Nivel Final", f"{h_res[-1]:.3f} m")
+        
+        # --- BOTÓN DE DESCARGA ---
+        csv = df_resultados.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Descargar datos (CSV)",
+            data=csv,
+            file_name=f'resultados_{modo.lower().replace(" ", "_")}.csv',
+            mime='text/csv',
+        )
+        st.dataframe(df_resultados, height=400)
+
+st.markdown("---")
+st.caption("Proyecto de Grado - Ingeniería Química UCV | 2026")
