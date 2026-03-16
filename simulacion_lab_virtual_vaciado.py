@@ -15,7 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilos CSS Avanzados para una interfaz profesional
+# Estilos CSS Avanzados para una interfaz profesional y académica
 st.markdown("""
     <style>
     .main { background-color: #f4f7f9; }
@@ -54,7 +54,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Encabezado Institucional
+# Encabezado Institucional: Escuela de Ingeniería Química
 col_l1, col_tit, col_l2 = st.columns([1, 4, 1])
 
 def render_logo_institucional(ruta, nombre):
@@ -135,7 +135,7 @@ def resolver_sistema(dt, h_prev, sp, geom, r, h_t, q_p_val, e_sum, e_prev):
     else: # Esférico
         area_h = np.pi * (2 * r * max(h_prev, 0.01) - max(h_prev, 0.01)**2)
     
-    area_h = max(area_h, 0.01) # Protección numérica
+    area_h = max(area_h, 0.01) # Protección numérica contra división por cero
 
     # Algoritmo PID Discreto
     err = sp - h_prev
@@ -147,7 +147,7 @@ def resolver_sistema(dt, h_prev, sp, geom, r, h_t, q_p_val, e_sum, e_prev):
     # Torricelli: Qout = Cd * a * sqrt(2gh)
     q_salida = 0.61 * 0.04 * np.sqrt(2 * 9.81 * h_prev) if h_prev > 0.005 else 0
     
-    # Balance de masa final
+    # Ecuación diferencial del balance de masa
     dh_dt = (q_entrada - q_salida + q_p_val) / area_h
     h_next = np.clip(h_prev + dh_dt * dt, 0, h_t)
     
@@ -161,9 +161,9 @@ col_graf, col_met = st.columns([2, 1])
 with col_graf:
     st.subheader("🖥️ Monitor del Proceso")
     placeholder_tanque = st.empty()
-    st.subheader("📊 Tendencia Temporal")
+    st.subheader("📊 Tendencia Temporal de Nivel")
     placeholder_grafico = st.empty()
-    st.subheader("⚙️ Acción de Válvula (u)")
+    st.subheader("⚙️ Acción del Controlador (Caudal de Entrada)")
     placeholder_u = st.empty()
 
 with col_met:
@@ -172,6 +172,8 @@ with col_met:
     m_h = st.empty(); m_e = st.empty(); m_mse = st.empty()
     st.markdown("</div>", unsafe_allow_html=True)
     tabla_resumen = st.empty()
+    # Espacio para exportar datos al finalizar
+    area_descarga = st.empty()
 
 # =============================================================================
 # 6. BUCLE DE SIMULACIÓN Y CONTROL DE ESTADOS
@@ -185,7 +187,7 @@ if not iniciar_sim:
         </div>
     """, unsafe_allow_html=True)
 else:
-    # Inicialización
+    # Inicialización de vectores para registro histórico
     dt = 1.0; vector_t = np.arange(0, tiempo_ensayo, dt)
     h_log, u_log, e_log = [], [], []
     h_corrida = h_total if op_tipo == "Vaciado" else 0.05
@@ -193,6 +195,7 @@ else:
     barra_p = st.progress(0)
 
     for i, t_act in enumerate(vector_t):
+        # Lógica de perturbación dinámica reintegrada
         q_p_inst = p_magnitud if (p_activa and t_act >= p_tiempo) else 0.0
         
         h_corrida, u_inst, e_inst, err_int, err_pasado = resolver_sistema(
@@ -202,9 +205,11 @@ else:
         
         # --- RENDERIZADO GEOMÉTRICO (WEDGE PARA ESFERA) ---
         fig_t, ax_t = plt.subplots(figsize=(5, 5))
+        ax_t.set_title(f"Representación del Tanque {geom_tanque}", fontsize=12, fontweight='bold')
         ax_t.set_xlim(-r_max*1.2, r_max*1.2); ax_t.set_ylim(-0.1, h_total*1.1)
-        ax_t.set_xticks([]); ax_t.set_ylabel("Nivel [m]")
+        ax_t.set_xticks([]); ax_t.set_ylabel("Altura del Fluido [m]")
 
+        # Efecto de turbulencia visual según flujo de entrada
         h_vis = h_corrida + (0.02 * np.sin(t_act * 4) if u_inst > 0.05 else 0)
 
         if geom_tanque == "Cilíndrico":
@@ -220,26 +225,49 @@ else:
                 ang_w = np.degrees(np.arccos(np.clip(1 - (h_vis/r_max), -1, 1)))
                 ax_t.add_patch(plt.matplotlib.patches.Wedge((0, r_max), r_max, 270-ang_w, 270+ang_w, color='#3498db', alpha=0.6))
 
-        ax_t.axhline(y=sp_nivel, color='#e74c3c', ls='--', lw=2, label="Setpoint")
+        ax_t.axhline(y=sp_nivel, color='#e74c3c', ls='--', lw=2, label=f"Setpoint: {sp_nivel}m")
+        ax_t.legend(loc='upper right')
         placeholder_tanque.pyplot(fig_t); plt.close(fig_t)
 
-        # --- TENDENCIAS (PERSISTENTES) ---
+        # --- TENDENCIAS TEMPORALES (CON NOMBRES Y UNIDADES) ---
+        # Gráfica de Nivel (PV vs SP)
         f_tr, ax_tr = plt.subplots(figsize=(8, 3.5))
-        ax_tr.plot(h_log, color='#2980b9', lw=2.5, label="PV (Nivel)")
-        ax_tr.axhline(y=sp_nivel, color='red', ls='--', label="SP")
+        ax_tr.set_title("Respuesta Dinámica: Nivel (PV) vs Consigna (SP)", fontsize=10, fontweight='bold')
+        ax_tr.plot(h_log, color='#2980b9', lw=2.5, label="Nivel medido (PV)")
+        ax_tr.axhline(y=sp_nivel, color='red', ls='--', label="Consigna (SP)")
+        ax_tr.set_xlabel("Tiempo de Ensayo [s]"); ax_tr.set_ylabel("Nivel del Fluido [m]")
         ax_tr.set_xlim(0, tiempo_ensayo); ax_tr.set_ylim(0, h_total*1.1); ax_tr.grid(alpha=0.2)
+        ax_tr.legend()
         placeholder_grafico.pyplot(f_tr); plt.close(f_tr)
 
+        # Gráfica de Acción de Control (u)
         f_u, ax_u = plt.subplots(figsize=(8, 2.5))
-        ax_u.step(range(len(u_log)), u_log, color='#e67e22', lw=2)
-        ax_u.set_xlim(0, tiempo_ensayo); ax_u.set_ylim(0, 0.7); placeholder_u.pyplot(f_u); plt.close(f_u)
+        ax_u.set_title("Acción del Controlador: Caudal de Alimentación (u)", fontsize=10, fontweight='bold')
+        ax_u.step(range(len(u_log)), u_log, color='#e67e22', lw=2, where='post', label="Flujo de entrada")
+        ax_u.set_xlabel("Tiempo de Ensayo [s]"); ax_u.set_ylabel("Caudal [m³/s]")
+        ax_u.set_xlim(0, tiempo_ensayo); ax_u.set_ylim(0, 0.7); ax_u.grid(alpha=0.2)
+        placeholder_u.pyplot(f_u); plt.close(f_u)
 
-        # Métricas
+        # Actualización de Métricas de Ingeniería en tiempo real
         m_h.metric("Nivel PV [m]", f"{h_corrida:.3f}")
         m_e.metric("Error de Control", f"{e_inst:.4f} m", delta=f"{e_inst:.4f}", delta_color="inverse")
         
+        # Cálculo del Error Cuadrático Medio (MSE) para análisis estadístico
+        if len(h_log) > 5:
+            mse_val = mean_squared_error(np.full(len(h_log), sp_nivel), h_log)
+            m_mse.metric("MSE Experimental", f"{mse_val:.6f}")
+        
         time.sleep(0.005); barra_p.progress((i+1)/len(vector_t))
 
-    # MENSAJE DE FINALIZACIÓN
+    # --- FINALIZACIÓN Y EXPORTACIÓN ---
     st.success(f"✨ Simulación Experimental de {geom_tanque} Culminada Exitosamente.")
     st.balloons()
+    
+    # Generar CSV para que lo uses en tu tomo de tesis
+    df_descarga = pd.DataFrame({"Tiempo [s]": vector_t, "Nivel [m]": h_log, "Caudal [m3/s]": u_log})
+    area_descarga.download_button(
+        "📥 Descargar Datos del Ensayo (CSV)", 
+        df_descarga.to_csv(index=False), 
+        "resultados_simulacion_ucv.csv", 
+        use_container_width=True
+    )
