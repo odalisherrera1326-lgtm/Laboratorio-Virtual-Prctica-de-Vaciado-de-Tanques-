@@ -2,115 +2,145 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 from sklearn.metrics import mean_squared_error, r2_score
 
-# Configuración de página
-st.set_page_config(page_title="Control de Procesos - UCV", layout="wide")
+# --- 1. CONFIGURACIÓN E IDENTIDAD VISUAL ---
+st.set_page_config(page_title="Práctica de Vaciado de Tanques - UCV", layout="wide")
 
-st.title("🧪 Laboratorio Virtual de Operaciones Unitarias")
-st.subheader("Diseño de la práctica de vaciado y llenado de tanques")
+col_l1, col_tit, col_l2 = st.columns([1, 4, 1])
 
-# --- BARRA LATERAL: ENTRADAS COMPLETAS ---
-st.sidebar.header("📥 Parámetros de Entrada")
+def cargar_logo(nombre_archivo, alias):
+    if os.path.exists(nombre_archivo):
+        st.image(nombre_archivo, width=100)
+    else:
+        st.markdown(f"<div style='text-align:center; border: 1px solid #ccc; padding: 20px;'>Logo {alias}</div>", unsafe_allow_html=True)
 
-# 1. Configuración del Proceso
-tipo_sistema = st.sidebar.selectbox("Tipo de Sistema", ["Vaciado (Descarga)", "Llenado (Carga)"])
-area_tanque = st.sidebar.number_input("Área del Tanque (m²)", value=1.5)
-setpoint = st.sidebar.slider("Nivel de Referencia (m)", 0.0, 5.0, 2.5)
+with col_l1:
+    cargar_logo("logo_ucv.png", "UCV")
+with col_tit:
+    st.markdown("<h1 style='text-align: center;'>Práctica de Vaciado de Tanques</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Escuela de Ingeniería Química - Universidad Central de Venezuela</p>", unsafe_allow_html=True)
+with col_l2:
+    cargar_logo("logo_quimica.png", "EIQ")
 
-# 2. Perturbación (Fuga o Entrada no deseada)
+st.markdown("---")
+
+# --- 2. MARCO TEÓRICO INTEGRADO ---
+with st.expander("📖 Marco Teórico: Modelado de Geometría Variable", expanded=True):
+    st.markdown(r"""
+    El balance de masa para un tanque de sección transversal variable es:
+    
+    $$A(h) \frac{dh}{dt} = Q_{in} - Q_{out} \pm Q_{p}$$
+    
+    Donde el área superficial $A(h)$ depende de la geometría:
+    * **Cilíndrico:** $A(h) = \pi R^2$ (Constante)
+    * **Cónico:** $A(h) = \pi \left( \frac{R}{H} h \right)^2$
+    * **Esférico:** $A(h) = \pi (2Rh - h^2)$
+    
+    El caudal de salida se rige por la Ley de Torricelli experimental: $Q_{out} = C_d \cdot a \cdot \sqrt{2gh}$.
+    """)
+
+# --- 3. BARRA LATERAL: PARÁMETROS EXPERIMENTALES ---
+st.sidebar.header("⚙️ Configuración del Sistema")
+
+# Selección de Proceso y Geometría
+tipo_proceso = st.sidebar.selectbox("Tipo de Proceso", ["Llenado", "Vaciado"])
+geometria = st.sidebar.selectbox("Geometría del Tanque", ["Cilíndrico", "Cónico", "Esférico"])
+radio_max = st.sidebar.number_input("Radio Máximo (R) [m]", value=1.0)
+altura_total = st.sidebar.number_input("Altura Total (H) [m]", value=3.0)
+
+# Parámetros de Control
+setpoint = st.sidebar.slider("Setpoint (Nivel Deseado) [m]", 0.1, altura_total, altura_total/2)
+
+# Perturbación (Caudal imprevisto)
 st.sidebar.divider()
-st.sidebar.subheader("🌪️ Perturbación")
-hay_perturbacion = st.sidebar.checkbox("Añadir Perturbación")
-valor_perturbacion = 0.0
-if hay_perturbacion:
-    valor_perturbacion = st.sidebar.slider("Magnitud de la Perturbación", -0.5, 0.5, 0.1)
+st.sidebar.subheader("🌪️ Perturbación ($Q_p$)")
+hay_perturbacion = st.sidebar.toggle("Activar Perturbación")
+mag_pert = st.sidebar.number_input("Magnitud ($Q_p$) [m³/s]", value=0.005, format="%.4f") if hay_perturbacion else 0.0
+t_pert = st.sidebar.slider("Instante de perturbación (s)", 0, 500, 100) if hay_perturbacion else 0
 
-# 3. Parámetros del Controlador PID
+# Sintonización PID
 st.sidebar.divider()
-st.sidebar.subheader("🎮 Sintonización PID")
-kp = st.sidebar.number_input("Kp", value=1.2)
+st.sidebar.subheader("🎮 Parámetros PID")
+kp = st.sidebar.number_input("Kp", value=2.5)
 ki = st.sidebar.number_input("Ki", value=0.5)
 kd = st.sidebar.number_input("Kd", value=0.1)
 
-t_final = st.sidebar.slider("Tiempo de Simulación (s)", 10, 500, 150)
+t_sim = st.sidebar.slider("Tiempo de Simulación (s)", 60, 600, 300)
 
-# --- LÓGICA DE SIMULACIÓN INTEGRADA ---
-t = np.linspace(0, t_final, 200)
-
-# Simulación matemática que incluye el tipo de sistema y la perturbación
-def simular_proceso(t, sp, tipo, pert):
-    # Base de la respuesta (segundo orden)
-    base = sp * (1 - np.exp(-0.04 * t) * (np.cos(0.08 * t)))
+# --- 4. LÓGICA DE SIMULACIÓN (EULER) ---
+def simular():
+    dt = 0.5
+    tiempo = np.arange(0, t_sim, dt)
+    h = np.zeros(len(tiempo))
+    h[0] = altura_total if tipo_proceso == "Vaciado" else 0.01
     
-    # Ajuste por tipo de sistema
-    if tipo == "Vaciado (Descarga)":
-        resultado = (5.0 - base) # Empieza lleno y vacía hacia el SP
-    else:
-        resultado = base # Empieza vacío y llena hacia el SP
+    err_acum = 0
+    err_prev = 0
+    
+    for i in range(1, len(tiempo)):
+        # Calcular Área Transversal según Geometría
+        if geometria == "Cilíndrico":
+            A_h = np.pi * (radio_max**2)
+        elif geometria == "Cónico":
+            A_h = np.pi * ( (radio_max / altura_total) * h[i-1] )**2
+        else: # Esférico
+            A_h = np.pi * (2 * radio_max * h[i-1] - h[i-1]**2)
         
-    # Aplicar perturbación después del 30% del tiempo
-    for i in range(len(t)):
-        if t[i] > (t_final * 0.3):
-            resultado[i] += pert * (1 - np.exp(-0.1 * (t[i] - t_final*0.3)))
-            
-    return np.clip(resultado, 0, 5.0)
+        # Evitar división por cero en geometrías que se cierran en la base
+        A_h = max(A_h, 0.01)
 
-nivel = simular_proceso(t, setpoint, tipo_sistema, valor_perturbacion)
-df_simulacion = pd.DataFrame({"Tiempo (s)": t, "Nivel (m)": nivel})
+        # Controlador PID
+        error = setpoint - h[i-1]
+        err_acum += error * dt
+        der = (error - err_prev) / dt
+        u = (kp * error) + (ki * err_acum) + (kd * der)
+        
+        q_in = np.clip(u, 0, 0.5) # Caudal entrada máximo
+        q_out = 0.6 * 0.05 * np.sqrt(2 * 9.81 * h[i-1]) if h[i-1] > 0 else 0
+        q_p = mag_pert if (hay_perturbacion and tiempo[i] >= t_pert) else 0
+        
+        # Balance: dh/dt = (Qin - Qout + Qp) / A(h)
+        dh_dt = (q_in - q_out + q_p) / A_h
+        h[i] = np.clip(h[i-1] + dh_dt * dt, 0, altura_total)
+        err_prev = error
+        
+    return tiempo, h
 
-# --- VISUALIZACIÓN ---
-col1, col2 = st.columns([2, 1])
+t, nivel = simular()
+df_res = pd.DataFrame({"Tiempo (s)": t, "Nivel (m)": nivel})
 
-with col1:
-    st.markdown(f"### 📈 Curva de Respuesta - {tipo_sistema}")
+# --- 5. RESULTADOS Y ANÁLISIS ---
+col_g, col_d = st.columns([2, 1])
+
+with col_g:
+    st.subheader(f"Respuesta del Sistema: {geometria}")
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(t, nivel, label="Nivel Medido (PV)", color="#00d1b2", linewidth=2.5)
-    ax.axhline(y=setpoint, color='red', linestyle='--', label=f"Setpoint (SP): {setpoint}m")
-    ax.set_xlabel("Tiempo (segundos)")
-    ax.set_ylabel("Altura (metros)")
+    ax.plot(t, nivel, color='#00a65a', lw=2, label='Nivel Real (PV)')
+    ax.axhline(y=setpoint, color='red', ls='--', label=f'Setpoint: {setpoint}m')
+    if hay_perturbacion:
+        ax.axvline(x=t_pert, color='orange', ls=':', label='Perturbación')
+    ax.set_xlabel("Tiempo (s)")
+    ax.set_ylabel("Altura (m)")
     ax.legend()
-    ax.grid(True, linestyle=':', alpha=0.6)
     st.pyplot(fig)
 
-with col2:
-    st.markdown("### 📋 Registro de Datos")
-    st.dataframe(df_simulacion.tail(12), use_container_width=True)
+with col_d:
+    st.subheader("Análisis de Desempeño")
+    ref = np.full(len(nivel), setpoint)
+    mse = mean_squared_error(ref, nivel)
+    r2 = r2_score(ref, nivel)
+    n_fin = nivel[-1]
+    
+    st.metric("Nivel Final", f"{n_fin:.3f} m")
+    st.metric("Error Residual", f"{setpoint - n_fin:.4f} m")
+    st.metric("Precisión (R²)", f"{r2:.4f}")
+    
+    st.write("**Resumen Técnico**")
+    st.table(pd.DataFrame({
+        "Métrica": ["MSE", "Geometría", "Perturbación"],
+        "Valor": [f"{mse:.6f}", geometria, f"{mag_pert} m³/s" if hay_perturbacion else "No"]
+    }))
 
-# --- ANÁLISIS DE DESEMPEÑO (TODO LO DEL VIDEO) ---
-st.divider()
-st.header("📊 Análisis de Desempeño y Error")
-
-# Cálculos
-referencia = np.full(len(nivel), setpoint)
-mse = mean_squared_error(referencia, nivel)
-r2 = r2_score(referencia, nivel)
-nivel_final = nivel[-1]
-error_residual = setpoint - nivel_final
-
-# Métricas estilo Dashboard
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Tipo", "Llenado" if tipo_sistema == "Llenado (Carga)" else "Vaciado")
-c2.metric("Nivel Final", f"{nivel_final:.3f} m")
-c3.metric("Error Residual", f"{error_residual:.4f} m", delta=f"{error_residual:.4f}", delta_color="inverse")
-c4.metric("Precisión R²", f"{r2:.4f}")
-
-# Tabla Comparativa
-st.subheader("📝 Resumen para el Informe Técnico")
-tabla_resumen = pd.DataFrame({
-    "Variable de Control": ["Setpoint", "Nivel Final Real", "Error Cuadrático (MSE)", "Coeficiente R²", "Perturbación Aplicada"],
-    "Valor": [f"{setpoint} m", f"{nivel_final:.4f} m", f"{mse:.6f}", f"{r2:.4f}", f"{valor_perturbacion} m" if hay_perturbacion else "Ninguna"]
-})
-st.table(tabla_resumen)
-
-# Lógica de conclusión automática
-if abs(error_residual) < 0.05 and not hay_perturbacion:
-    st.success("✅ **Control Óptimo:** El sistema compensó la dinámica sin errores significativos.")
-elif hay_perturbacion and abs(error_residual) < 0.1:
-    st.info("ℹ️ **Robustez:** El controlador logró mitigar la perturbación satisfactoriamente.")
-else:
-    st.warning("⚠️ **Ajuste Necesario:** El error residual es considerable. Se recomienda aumentar la acción Integral (Ki).")
-
-# Botón de Descarga
-csv = df_simulacion.to_csv(index=False).encode('utf-8')
-st.download_button("📥 Descargar Datos para Tesis (CSV)", data=csv, file_name='data_ucv_simulacion.csv', mime='text/csv')
+st.download_button("📥 Descargar Datos (CSV)", df_res.to_csv(index=False), "practica_ucv.csv")
