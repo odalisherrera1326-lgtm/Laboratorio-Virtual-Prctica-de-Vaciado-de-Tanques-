@@ -114,6 +114,8 @@ with col_main:
     st.subheader("Visualización del Proceso")
     tanque_plot = st.empty()
     grafico_control = st.empty()
+    st.subheader("⚙️ Acción del Controlador (Esfuerzo u)") # Adición solicitada
+    grafico_u = st.empty() # Adición solicitada
 
 # Panel de Análisis (Fijo a la derecha)
 with col_analysis:
@@ -175,7 +177,7 @@ if btn_simular:
         tanque_plot.pyplot(fig_t)
         plt.close(fig_t)
         
-        # --- Gráfico de Control ---
+        # --- Gráfico de Nivel ---
         fig_c, ax_c = plt.subplots(figsize=(7, 3.5))
         ax_c.plot(tiempo_anim[:len(h_anim)], h_anim, color='#1e88e5', lw=2.5, label="Nivel (PV)")
         ax_c.axhline(y=setpoint, color='red', ls='--', label="Setpoint")
@@ -186,6 +188,15 @@ if btn_simular:
         ax_c.legend(loc="lower right"); ax_c.grid(True, alpha=0.2)
         grafico_control.pyplot(fig_c)
         plt.close(fig_c)
+
+        # --- Gráfico de Acción de Control (u) --- Adición solicitada
+        fig_u, ax_u = plt.subplots(figsize=(7, 2.5))
+        ax_u.step(tiempo_anim[:len(u_anim)], u_anim, color='#e67e22', lw=2, label="Válvula (u)")
+        ax_u.set_xlim(0, t_sim); ax_u.set_ylim(0, 0.6)
+        ax_u.set_xlabel("Tiempo (s)"); ax_u.set_ylabel("Caudal (m³/s)")
+        ax_u.legend(loc="upper right"); ax_u.grid(True, alpha=0.2)
+        grafico_u.pyplot(fig_u)
+        plt.close(fig_u)
 
         # 4. Actualizar Análisis (Columna Derecha - TIEMPO REAL)
         metrica_nivel.metric("Nivel Actual", f"{h_actual:.3f} m")
@@ -213,10 +224,9 @@ if btn_simular:
         progress_bar.progress((i + 1) / len(tiempo_anim))
 
     # --- 5. RESULTADOS FINALES ---
-    # Botón de descarga al terminar
     boton_descarga.download_button(
         label="📥 Descargar Reporte Experimental (CSV)",
-        data=pd.DataFrame({"Tiempo":tiempo_anim, "Nivel":h_anim, "Error":e_anim}).to_csv(index=False),
+        data=pd.DataFrame({"Tiempo":tiempo_anim, "Nivel":h_anim, "Error":e_anim, "Control_u":u_anim}).to_csv(index=False),
         file_name=f"simulacion_ucv_{geometria.lower()}.csv",
         use_container_width=True
     )
