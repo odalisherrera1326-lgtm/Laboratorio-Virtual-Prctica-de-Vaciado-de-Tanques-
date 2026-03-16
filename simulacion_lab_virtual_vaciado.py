@@ -10,16 +10,16 @@ from sklearn.metrics import mean_squared_error
 # 1. CONFIGURACIÓN E IDENTIDAD INSTITUCIONAL UCV
 # =============================================================================
 st.set_page_config(
-    page_title="Tesis UCV - Simulador de Tanques",
+    page_title="Tesis UCV - Simulación Dinámica",
     page_icon="🧪",
     layout="wide"
 )
 
-# Estilos CSS para un acabado de nivel de postgrado
+# Estilos CSS Avanzados para una interfaz profesional
 st.markdown("""
     <style>
-    .main { background-color: #f9fbfd; }
-    [data-testid="stMetricValue"] { font-size: 2rem; color: #1a5276; font-weight: bold; }
+    .main { background-color: #f4f7f9; }
+    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #1a5276; font-weight: bold; }
     div.stMetric {
         background-color: #ffffff;
         padding: 20px;
@@ -34,193 +34,212 @@ st.markdown("""
         font-weight: bold;
         height: 3.5em;
         width: 100%;
+        transition: 0.3s;
     }
-    h1 { color: #1a5276; }
+    .stButton>button:hover {
+        background-color: #154360;
+        box-shadow: 0 4px 15px rgba(26,82,118,0.3);
+    }
+    h1 { color: #1a5276; text-align: center; }
     h3 { color: #21618c; border-bottom: 2px solid #d4e6f1; padding-bottom: 8px; }
+    .instruccion-box {
+        background-color: #e8f4f8;
+        padding: 30px;
+        border-radius: 15px;
+        border: 1px dashed #1a5276;
+        text-align: center;
+        color: #1a5276;
+        font-size: 1.2em;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# Encabezado con validación de logotipos
+# Encabezado Institucional
 col_l1, col_tit, col_l2 = st.columns([1, 4, 1])
 
-def cargar_imagen_institucional(ruta, etiqueta):
+def render_logo_institucional(ruta, nombre):
     if os.path.exists(ruta):
         st.image(ruta, width=110)
     else:
-        st.markdown(f"<div style='border:2px dashed #ccc; padding:20px; text-align:center;'>{etiqueta}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='border:1px solid #ccc; padding:10px;'>{nombre}</div>", unsafe_allow_html=True)
 
-with col_l1: cargar_imagen_institucional("logo_ucv.png", "UCV")
+with col_l1: render_logo_institucional("logo_ucv.png", "UCV")
 with col_tit:
-    st.markdown("<h1 style='text-align: center;'>Laboratorio Virtual de Ingeniería Química</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Simulación de Vaciado y Llenado | Tesis de Grado - UCV</p>", unsafe_allow_html=True)
-with col_l2: cargar_imagen_institucional("logo_quimica.png", "EIQ")
+    st.markdown("<h1>Unidad de Simulación: Operaciones Unitarias</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #5d6d7e;'>Escuela de Ingeniería Química | Facultad de Ingeniería - UCV</p>", unsafe_allow_html=True)
+with col_l2: render_logo_institucional("logo_quimica.png", "EIQ")
 
 st.markdown("---")
 
 # =============================================================================
-# 2. MARCO TEÓRICO (FENÓMENOS DE TRANSPORTE)
+# 2. MARCO TEÓRICO: BALANCE DE MASA Y TORRICELLI
 # =============================================================================
-with st.expander("📖 Fundamentos del Modelo Matemático", expanded=False):
+with st.expander("📖 Marco Teórico: Ecuaciones de Conservación y Descarga", expanded=False):
     st.markdown(r"""
-    La variación del nivel $h$ en un tanque esférico de radio $R$ se define por:
-    $$ \pi(2Rh - h^2) \frac{dh}{dt} = Q_{in} - Q_{out} + Q_{p} $$
-    Donde $Q_p$ representa la perturbación o falla externa introducida en el sistema.
+    La dinámica del sistema se describe mediante el **Balance Global de Masa** para un volumen de control con densidad constante ($\rho$):
+    
+    $$ \frac{dV}{dt} = Q_{in} - Q_{out} \pm Q_{p} $$
+    
+    Considerando que el volumen es función del nivel ($V = \int A(h)dh$), aplicamos la regla de la cadena para obtener la ecuación general de vaciado/llenado válida para **cualquier área transversal $A(h)$**:
+    
+    $$ A(h) \frac{dh}{dt} = Q_{in} - (C_d \cdot a \cdot \sqrt{2gh}) \pm Q_{p} $$
+    
+    Donde:
+    * **$A(h)$**: Área de la sección transversal en función de la altura (m²).
+    * **$Q_{in}$**: Flujo de entrada controlado (m³/s).
+    * **$Q_{out}$**: Flujo de salida basado en la **Ley de Torricelli** (m³/s).
+    * **$C_d$**: Coeficiente de descarga (adimensional).
+    * **$a$**: Área del orificio de salida (m²).
+    * **$Q_{p}$**: Flujo de perturbación o falla (m³/s).
     """)
 
 # =============================================================================
-# 3. PANEL DE CONTROL LATERAL (CONFIGURACIÓN)
+# 3. BARRA LATERAL: PARÁMETROS TÉCNICOS
 # =============================================================================
-st.sidebar.header("⚙️ Parámetros del Proceso")
+st.sidebar.header("⚙️ Configuración del Sistema")
 
 with st.sidebar.container(border=True):
-    regimen = st.sidebar.selectbox("🎯 Régimen", ["Llenado", "Vaciado"])
-    geometria = st.sidebar.selectbox("📐 Geometría", ["Cilíndrico", "Cónico", "Esférico"])
+    op_tipo = st.sidebar.selectbox("🎯 Operación Principal", ["Llenado", "Vaciado"])
+    geom_tanque = st.sidebar.selectbox("📐 Geometría del Equipo", ["Cilíndrico", "Cónico", "Esférico"])
 
-with st.sidebar.expander("📏 Dimensiones Físicas", expanded=True):
-    radio_diseno = st.number_input("Radio (R) [m]", value=1.0, step=0.1)
-    # En esfera, la altura total es obligatoriamente el diámetro
-    h_sug = 3.0 if geometria != "Esférico" else radio_diseno * 2
-    altura_tanque = st.number_input("Altura (H) [m]", value=float(h_sug), step=0.5)
-    setpoint = st.slider("Nivel Deseado (SP) [m]", 0.1, float(altura_tanque), 1.0)
+with st.sidebar.expander("📏 Especificaciones del Tanque", expanded=True):
+    r_max = st.number_input("Radio de Diseño (R) [m]", value=1.0, min_value=0.1, step=0.1)
+    h_sug = 3.0 if geom_tanque != "Esférico" else r_max * 2
+    h_total = st.number_input("Altura de Diseño (H) [m]", value=float(h_sug), min_value=0.1, step=0.5)
+    sp_nivel = st.slider("Consigna de Nivel (Setpoint) [m]", 0.1, float(h_total), float(h_total/2))
 
-# BLOQUE DE PERTURBACIÓN (Vital para la defensa)
-with st.sidebar.expander("🌪️ Perturbación Experimental ($Q_p$)"):
-    activar_p = st.toggle("Activar Falla/Fuga", value=True)
-    magnitud_p = st.number_input("Caudal Qp [m³/s]", value=0.060, format="%.4f") if activar_p else 0.0
-    inicio_p = st.slider("Instante de inicio (s)", 0, 300, 64) if activar_p else 0
+with st.sidebar.expander("🌪️ Escenario de Perturbación ($Q_p$)"):
+    p_activa = st.toggle("Simular Falla/Fuga Externas", value=True)
+    p_magnitud = st.number_input("Magnitud Qp [m³/s]", value=0.045, format="%.4f") if p_activa else 0.0
+    p_tiempo = st.slider("Inicio de perturbación [s]", 0, 500, 80) if p_activa else 0
 
-with st.sidebar.expander("🎮 Configuración PID"):
+with st.sidebar.expander("🎮 Parámetros del Controlador PID"):
     c1, c2, c3 = st.columns(3)
-    kp = c1.number_input("Kp", value=2.50)
-    ki = c2.number_input("Ki", value=0.50)
-    kd = c3.number_input("Kd", value=0.10)
-    t_sim = st.sidebar.slider("Tiempo total [s]", 60, 600, 300)
+    kp_val = c1.number_input("Kp", value=2.6)
+    ki_val = c2.number_input("Ki", value=0.5)
+    kd_val = c3.number_input("Kd", value=0.1)
+    tiempo_ensayo = st.sidebar.slider("Tiempo de simulación [s]", 60, 600, 300)
 
 st.sidebar.markdown("---")
-btn_inicio = st.sidebar.button("🚀 Iniciar Prueba Experimental", use_container_width=True)
+iniciar_sim = st.sidebar.button("🚀 Iniciar Simulación Dinámica", use_container_width=True)
 
 # =============================================================================
-# 4. FUNCIONES DE CÁLCULO Y DINÁMICA
+# 4. LÓGICA DE CÁLCULO: MÉTODO DE EULER
 # =============================================================================
-def calcular_dinamica(dt, h_p, sp, geom, r, h_t, q_p_act, e_int, e_p):
-    # Cálculo de Área Transversal
+def resolver_sistema(dt, h_prev, sp, geom, r, h_t, q_p_val, e_sum, e_prev):
+    # Cálculo de A(h) según geometría
     if geom == "Cilíndrico":
-        A = np.pi * (r**2)
+        area_h = np.pi * (r**2)
     elif geom == "Cónico":
-        A = np.pi * ((r/h_t) * max(h_p, 0.01))**2
+        area_h = np.pi * ((r/h_t) * max(h_prev, 0.01))**2
     else: # Esférico
-        A = np.pi * (2 * r * max(h_p, 0.01) - max(h_p, 0.01)**2)
+        area_h = np.pi * (2 * r * max(h_prev, 0.01) - max(h_prev, 0.01)**2)
     
-    A = max(A, 0.01) # Protección contra división por cero
+    area_h = max(area_h, 0.01) # Protección numérica
 
-    # Lógica PID
-    error = sp - h_p
-    e_int += error * dt
-    e_der = (error - e_p) / dt
-    u = (kp * error) + (ki * e_int) + (kd * e_der)
+    # Algoritmo PID Discreto
+    err = sp - h_prev
+    e_sum += err * dt
+    e_der = (err - e_prev) / dt
+    u_control = (kp_val * err) + (ki_val * e_sum) + (kd_val * e_der)
     
-    q_in = np.clip(u, 0, 0.6)
-    q_out = 0.62 * 0.05 * np.sqrt(2 * 9.81 * h_p) if h_p > 0.01 else 0
+    q_entrada = np.clip(u_control, 0, 0.6)
+    # Torricelli: Qout = Cd * a * sqrt(2gh)
+    q_salida = 0.61 * 0.04 * np.sqrt(2 * 9.81 * h_prev) if h_prev > 0.005 else 0
     
-    # Ecuación Diferencial con Perturbación
-    dhdt = (q_in - q_out + q_p_act) / A
-    h_n = np.clip(h_p + dhdt * dt, 0, h_t)
+    # Balance de masa final
+    dh_dt = (q_entrada - q_salida + q_p_val) / area_h
+    h_next = np.clip(h_prev + dh_dt * dt, 0, h_t)
     
-    return h_n, q_in, error, e_int, error
+    return h_next, q_entrada, err, e_sum, err
 
 # =============================================================================
-# 5. DASHBOARD DE VISUALIZACIÓN
+# 5. ESTRUCTURA DE LA INTERFAZ (DASHBOARD)
 # =============================================================================
 col_graf, col_met = st.columns([2, 1])
 
 with col_graf:
-    st.subheader("🖥️ Monitor de Planta")
-    visual_tanque = st.empty()
-    st.subheader("📈 Respuesta del Sistema (PV)")
-    visual_tendencia = st.empty()
-    st.subheader("⚙️ Esfuerzo de Control (u)")
-    visual_u = st.empty()
+    st.subheader("🖥️ Monitor del Proceso")
+    placeholder_tanque = st.empty()
+    st.subheader("📊 Tendencia Temporal")
+    placeholder_grafico = st.empty()
+    st.subheader("⚙️ Acción de Válvula (u)")
+    placeholder_u = st.empty()
 
 with col_met:
     st.markdown("<div class='metric-panel'>", unsafe_allow_html=True)
     st.subheader("📊 Métricas de Control")
-    m_h = st.empty(); m_e = st.empty()
-    st.markdown("---")
-    m_mse = st.empty(); m_r2 = st.empty()
+    m_h = st.empty(); m_e = st.empty(); m_mse = st.empty()
     st.markdown("</div>", unsafe_allow_html=True)
     tabla_resumen = st.empty()
-    area_descarga = st.empty()
 
 # =============================================================================
-# 6. BUCLE DE SIMULACIÓN Y RENDERIZADO (CORRECCIÓN ESFÉRICA)
+# 6. BUCLE DE SIMULACIÓN Y CONTROL DE ESTADOS
 # =============================================================================
-if btn_inicio:
-    dt = 1.0; t_rango = np.arange(0, t_sim, dt)
-    h_hist, u_hist, e_hist = [], [], []
-    h_actual = altura_tanque if regimen == "Vaciado" else 0.05
-    err_i, err_p = 0, 0
-    prog = st.progress(0)
+if not iniciar_sim:
+    # MENSAJE DE INICIO: Solo se muestra si no se ha pulsado el botón
+    placeholder_tanque.markdown("""
+        <div class='instruccion-box'>
+            <h3>⚠️ Sistema en Espera</h3>
+            <p>Por favor, ajuste los parámetros en la barra lateral y presione <b>'Iniciar Simulación'</b> para comenzar el experimento virtual.</p>
+        </div>
+    """, unsafe_allow_html=True)
+else:
+    # Inicialización
+    dt = 1.0; vector_t = np.arange(0, tiempo_ensayo, dt)
+    h_log, u_log, e_log = [], [], []
+    h_corrida = h_total if op_tipo == "Vaciado" else 0.05
+    err_int, err_pasado = 0, 0
+    barra_p = st.progress(0)
 
-    for i, t in enumerate(t_rango):
-        # Lógica de perturbación reintegrada
-        q_pert = magnitud_p if (activar_p and t >= inicio_p) else 0.0
+    for i, t_act in enumerate(vector_t):
+        q_p_inst = p_magnitud if (p_activa and t_act >= p_tiempo) else 0.0
         
-        h_actual, u_val, err_val, err_i, err_p = calcular_dinamica(
-            dt, h_actual, setpoint, geometria, radio_diseno, altura_tanque, q_pert, err_i, err_p
+        h_corrida, u_inst, e_inst, err_int, err_pasado = resolver_sistema(
+            dt, h_corrida, sp_nivel, geom_tanque, r_max, h_total, q_p_inst, err_int, err_pasado
         )
-        h_hist.append(h_actual); u_hist.append(u_val); e_hist.append(err_val)
+        h_log.append(h_corrida); u_log.append(u_inst); e_log.append(e_inst)
         
-        # --- DIBUJO PROFESIONAL DEL TANQUE ---
-        fig, ax = plt.subplots(figsize=(5, 5))
-        ax.set_xlim(-radio_diseno*1.2, radio_diseno*1.2)
-        ax.set_ylim(-0.1, altura_tanque*1.1)
-        ax.set_xticks([]); ax.set_ylabel("Nivel [m]")
+        # --- RENDERIZADO GEOMÉTRICO (WEDGE PARA ESFERA) ---
+        fig_t, ax_t = plt.subplots(figsize=(5, 5))
+        ax_t.set_xlim(-r_max*1.2, r_max*1.2); ax_t.set_ylim(-0.1, h_total*1.1)
+        ax_t.set_xticks([]); ax_t.set_ylabel("Nivel [m]")
 
-        # Efecto de ondas (Turbulencia)
-        ondas = 0.02 * np.sin(t * 4) if (u_val > 0.05 or abs(q_pert) > 0) else 0
-        h_vis = h_actual + ondas
+        h_vis = h_corrida + (0.02 * np.sin(t_act * 4) if u_inst > 0.05 else 0)
 
-        if geometria == "Cilíndrico":
-            ax.plot([-radio_diseno, -radio_diseno, radio_diseno, radio_diseno], [altura_tanque, 0, 0, altura_tanque], color='#2c3e50', lw=4)
-            ax.add_patch(plt.Rectangle((-radio_diseno, 0), 2*radio_diseno, h_vis, color='#3498db', alpha=0.6))
-        elif geometria == "Cónico":
-            ax.plot([-radio_diseno, 0, radio_diseno], [altura_tanque, 0, altura_tanque], color='#2c3e50', lw=4)
-            r_h = (radio_diseno / altura_tanque) * h_vis
-            ax.add_patch(plt.Polygon([[-r_h, h_vis], [r_h, h_vis], [0, 0]], color='#3498db', alpha=0.6))
-        elif geometria == "Esférico":
-            # 1. Dibujar el contorno circular del tanque
-            tanque_circ = plt.Circle((0, radio_diseno), radio_diseno, color='#2c3e50', fill=False, lw=4)
-            ax.add_patch(tanque_circ)
-            
-            # 2. DIBUJO DEL AGUA CURVA (CORRECCIÓN):
-            # Usamos un "Wedge" (cuña) centrado en el centro de la esfera (0, R)
+        if geom_tanque == "Cilíndrico":
+            ax_t.plot([-r_max, -r_max, r_max, r_max], [h_total, 0, 0, h_total], color='#2c3e50', lw=4)
+            ax_t.add_patch(plt.Rectangle((-r_max, 0), 2*r_max, h_vis, color='#3498db', alpha=0.6))
+        elif geom_tanque == "Cónico":
+            ax_t.plot([-r_max, 0, r_max], [h_total, 0, h_total], color='#2c3e50', lw=4)
+            r_h = (r_max / h_total) * h_vis
+            ax_t.add_patch(plt.Polygon([[-r_h, h_vis], [r_h, h_vis], [0, 0]], color='#3498db', alpha=0.6))
+        elif geom_tanque == "Esférico":
+            ax_t.add_patch(plt.Circle((0, r_max), r_max, color='#2c3e50', fill=False, lw=4))
             if h_vis > 0:
-                # Calculamos el ángulo basado en la altura del fluido
-                # h = R - R*cos(theta) => cos(theta) = 1 - h/R
-                cos_theta = np.clip(1 - (h_vis/radio_diseno), -1, 1)
-                angulo_apertura = np.degrees(np.arccos(cos_theta))
-                
-                # El fluido se dibuja desde el fondo (270°) hacia ambos lados
-                agua_curva = plt.matplotlib.patches.Wedge(
-                    (0, radio_diseno), radio_diseno, 
-                    270 - angulo_apertura, 270 + angulo_apertura, 
-                    color='#3498db', alpha=0.6
-                )
-                ax.add_patch(agua_curva)
+                ang_w = np.degrees(np.arccos(np.clip(1 - (h_vis/r_max), -1, 1)))
+                ax_t.add_patch(plt.matplotlib.patches.Wedge((0, r_max), r_max, 270-ang_w, 270+ang_w, color='#3498db', alpha=0.6))
 
-        ax.axhline(y=setpoint, color='#e74c3c', ls='--', lw=2, label="Setpoint")
-        visual_tanque.pyplot(fig); plt.close(fig)
+        ax_t.axhline(y=sp_nivel, color='#e74c3c', ls='--', lw=2, label="Setpoint")
+        placeholder_tanque.pyplot(fig_t); plt.close(fig_t)
 
-        # Gráficos de Tendencia
-        f_t, ax_t = plt.subplots(figsize=(8, 3))
-        ax_t.plot(h_hist, color='#2980b9', lw=2); ax_t.axhline(y=setpoint, color='red', ls='--')
-        ax_t.set_xlim(0, t_sim); ax_t.set_ylim(0, altura_tanque*1.1); visual_tendencia.pyplot(f_t); plt.close(f_t)
+        # --- TENDENCIAS (PERSISTENTES) ---
+        f_tr, ax_tr = plt.subplots(figsize=(8, 3.5))
+        ax_tr.plot(h_log, color='#2980b9', lw=2.5, label="PV (Nivel)")
+        ax_tr.axhline(y=sp_nivel, color='red', ls='--', label="SP")
+        ax_tr.set_xlim(0, tiempo_ensayo); ax_tr.set_ylim(0, h_total*1.1); ax_tr.grid(alpha=0.2)
+        placeholder_grafico.pyplot(f_tr); plt.close(f_tr)
+
+        f_u, ax_u = plt.subplots(figsize=(8, 2.5))
+        ax_u.step(range(len(u_log)), u_log, color='#e67e22', lw=2)
+        ax_u.set_xlim(0, tiempo_ensayo); ax_u.set_ylim(0, 0.7); placeholder_u.pyplot(f_u); plt.close(f_u)
 
         # Métricas
-        m_h.metric("Nivel PV [m]", f"{h_actual:.3f}")
-        m_e.metric("Error (SP-PV)", f"{err_val:.4f}", delta=f"{err_val:.4f}", delta_color="inverse")
+        m_h.metric("Nivel PV [m]", f"{h_corrida:.3f}")
+        m_e.metric("Error de Control", f"{e_inst:.4f} m", delta=f"{e_inst:.4f}", delta_color="inverse")
         
-        time.sleep(0.01); prog.progress((i+1)/len(t_rango))
+        time.sleep(0.005); barra_p.progress((i+1)/len(vector_t))
 
-    st.success("✨ Ensayo culminado. El nivel en el tanque circular ahora respeta la geometría curva.")
-    area_descarga.download_button("📥 Descargar CSV", pd.DataFrame({"t":t_rango,"h":h_hist}).to_csv(), "datos_ucv.csv")
+    # MENSAJE DE FINALIZACIÓN
+    st.success(f"✨ Simulación Experimental de {geom_tanque} Culminada Exitosamente.")
+    st.balloons()
