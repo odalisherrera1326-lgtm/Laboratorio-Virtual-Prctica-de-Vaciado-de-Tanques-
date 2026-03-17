@@ -190,12 +190,13 @@ with col_met:
     area_descarga = st.empty()
 
 # =============================================================================
-# 6. BUCLE DE SIMULACIÓN Y CONTROL DE ESTADOS
+# 6. BUCLE DE SIMULACIÓN Y CONTROL DE ESTADOS (CORREGIDO PARA TIEMPO REAL)
 # =============================================================================
 if iniciar_sim:
     st.session_state.ejecutando = True
 
 if not st.session_state.ejecutando:
+    # Mensaje de espera con el estilo de tu tesis
     placeholder_tanque.markdown("""
         <div class='instruccion-box'>
             <h3>⚠️ Sistema en Espera</h3>
@@ -203,71 +204,88 @@ if not st.session_state.ejecutando:
         </div>
     """, unsafe_allow_html=True)
 else:
-    dt = 1.0; vector_t = np.arange(0, tiempo_ensayo, dt)
-    h_log, u_log, e_log = [], [], []
+    # 1. Preparación de variables de estado
+    dt = 1.0 
+    vector_t = np.arange(0, tiempo_ensayo, dt)
+    h_log, u_log = [], []
     h_corrida = h_total if op_tipo == "Vaciado" else 0.05
     err_int, err_pasado = 0, 0
+    
     barra_p = st.progress(0)
 
+    # 2. Bucle principal de cálculo y renderizado
     for i, t_act in enumerate(vector_t):
+        # Lógica de perturbación
         q_p_inst = p_magnitud if (p_activa and t_act >= p_tiempo) else 0.0
         
+        # Resolución numérica (Euler + PID)
         h_corrida, u_inst, e_inst, err_int, err_pasado = resolver_sistema(
             dt, h_corrida, sp_nivel, geom_tanque, r_max, h_total, q_p_inst, err_int, err_pasado
         )
-        h_log.append(h_corrida); u_log.append(u_inst); e_log.append(e_inst)
         
-        # Gráfica Tanque
-        fig_t, ax_t = plt.subplots(figsize=(5, 5))
-        ax_t.set_title(f"Representación del Tanque {geom_tanque}", fontsize=12, fontweight='bold')
-        ax_t.set_xlim(-r_max*1.2, r_max*1.2); ax_t.set_ylim(-0.1, h_total*1.1)
-        ax_t.set_xticks([]); ax_t.set_ylabel("Altura del Fluido [m]")
-
+        # Almacenamiento para las gráficas de tendencia
+        h_log.append(h_corrida)
+        u_log.append(u_inst)
+        
+        # --- ACTUALIZACIÓN DE GRÁFICAS EN TIEMPO REAL ---
+        
+        # A. Dibujo del Tanque Animado
+        fig_t, ax_t = plt.subplots(figsize=(5, 4))
+        ax_t.set_xlim(-r_max*1.2, r_max*1.2)
+        ax_t.set_ylim(-0.1, h_total*1.1)
+        ax_t.set_xticks([]); ax_t.set_ylabel("Nivel [m]")
+        
+        # Simulación de oleaje visual si hay flujo de entrada
         h_vis = h_corrida + (0.02 * np.sin(t_act * 4) if u_inst > 0.05 else 0)
-
+        
         if geom_tanque == "Cilíndrico":
-            ax_t.plot([-r_max, -r_max, r_max, r_max], [h_total, 0, 0, h_total], color='#2c3e50', lw=4)
             ax_t.add_patch(plt.Rectangle((-r_max, 0), 2*r_max, h_vis, color='#3498db', alpha=0.6))
+            ax_t.plot([-r_max, -r_max, r_max, r_max], [h_total, 0, 0, h_total], color='#2c3e50', lw=3)
         elif geom_tanque == "Cónico":
-            ax_t.plot([-r_max, 0, r_max], [h_total, 0, h_total], color='#2c3e50', lw=4)
             r_h = (r_max / h_total) * h_vis
             ax_t.add_patch(plt.Polygon([[-r_h, h_vis], [r_h, h_vis], [0, 0]], color='#3498db', alpha=0.6))
+            ax_t.plot([-r_max, 0, r_max], [h_total, 0, h_total], color='#2c3e50', lw=3)
         elif geom_tanque == "Esférico":
-            ax_t.add_patch(plt.Circle((0, r_max), r_max, color='#2c3e50', fill=False, lw=4))
+            ax_t.add_patch(plt.Circle((0, r_max), r_max, color='#2c3e50', fill=False, lw=3))
             if h_vis > 0:
                 ang_w = np.degrees(np.arccos(np.clip(1 - (h_vis/r_max), -1, 1)))
                 ax_t.add_patch(plt.matplotlib.patches.Wedge((0, r_max), r_max, 270-ang_w, 270+ang_w, color='#3498db', alpha=0.6))
 
-        ax_t.axhline(y=sp_nivel, color='#e74c3c', ls='--', lw=2, label=f"Setpoint: {sp_nivel}m")
-        ax_t.legend(loc='upper right')
-        placeholder_tanque.pyplot(fig_t); plt.close(fig_t)
+        ax_t.axhline(y=sp_nivel, color='red', ls='--', label=f"SP: {sp_nivel}m")
+        placeholder_tanque.pyplot(fig_t)
+        plt.close(fig_t) # <--- Muy importante para que no se sature la memoria
 
-        # Gráfica Tendencia
-        f_tr, ax_tr = plt.subplots(figsize=(8, 3.5))
-        ax_tr.set_title("Respuesta Dinámica: Nivel (PV) vs Consigna (SP)", fontsize=10, fontweight='bold')
-        ax_tr.plot(h_log, color='#2980b9', lw=2.5, label="Nivel medido (PV)")
-        ax_tr.axhline(y=sp_nivel, color='red', ls='--', label="Consigna (SP)")
-        ax_tr.set_xlabel("Tiempo de Ensayo [s]"); ax_tr.set_ylabel("Nivel del Fluido [m]")
-        ax_tr.set_xlim(0, tiempo_ensayo); ax_tr.set_ylim(0, h_total*1.1); ax_tr.grid(alpha=0.2); ax_tr.legend()
-        placeholder_grafico.pyplot(f_tr); plt.close(f_tr)
+        # B. Gráfica de Tendencia de Nivel
+        fig_tr, ax_tr = plt.subplots(figsize=(8, 3.5))
+        # Graficamos el tiempo transcurrido hasta el momento i
+        ax_tr.plot(vector_t[:i+1], h_log, color='#2980b9', lw=2, label="Nivel (PV)")
+        ax_tr.axhline(y=sp_nivel, color='red', ls='--', alpha=0.5)
+        ax_tr.set_xlim(0, tiempo_ensayo) # Mantiene el eje X fijo para ver el avance
+        ax_tr.set_ylim(0, h_total*1.1)
+        ax_tr.set_xlabel("Tiempo [s]"); ax_tr.set_ylabel("Altura [m]")
+        ax_tr.grid(True, alpha=0.2)
+        placeholder_grafico.pyplot(fig_tr)
+        plt.close(fig_tr)
 
-        # Gráfica Acción Control
-        f_u, ax_u = plt.subplots(figsize=(8, 2.5))
-        ax_u.set_title("Acción del Controlador: Caudal de Alimentación (u)", fontsize=10, fontweight='bold')
-        ax_u.step(range(len(u_log)), u_log, color='#e67e22', lw=2, where='post', label="Flujo de entrada")
-        ax_u.set_xlabel("Tiempo de Ensayo [s]"); ax_u.set_ylabel("Caudal [m³/s]"); ax_u.set_xlim(0, tiempo_ensayo); ax_u.set_ylim(0, 0.7); ax_u.grid(alpha=0.2)
-        placeholder_u.pyplot(f_u); plt.close(f_u)
+        # C. Acción del Controlador
+        fig_u, ax_u = plt.subplots(figsize=(8, 2.5))
+        ax_u.step(vector_t[:i+1], u_log, color='#e67e22', where='post')
+        ax_u.set_xlim(0, tiempo_ensayo)
+        ax_u.set_ylim(0, 0.7)
+        ax_u.set_ylabel("u [m³/s]")
+        placeholder_u.pyplot(fig_u)
+        plt.close(fig_u)
 
+        # Actualización de métricas de texto
         m_h.metric("Nivel PV [m]", f"{h_corrida:.3f}")
-        m_e.metric("Error de Control", f"{e_inst:.4f} m", delta=f"{e_inst:.4f}", delta_color="inverse")
+        m_e.metric("Error de Control", f"{e_inst:.4f} m")
         
-        if len(h_log) > 5:
-            mse_val = mean_squared_error(np.full(len(h_log), sp_nivel), h_log)
-            m_mse.metric("MSE Experimental", f"{mse_val:.6f}")
-        
-        time.sleep(0.005); barra_p.progress((i+1)/len(vector_t))
+        # Pausa breve para permitir que Streamlit renderice
+        time.sleep(0.01) 
+        barra_p.progress((i+1)/len(vector_t))
 
-    st.success(f"✨ Simulación Experimental de {geom_tanque} Culminada Exitosamente.")
+    # --- FINALIZACIÓN ---
+    st.success(f"✨ Simulación de {geom_tanque} completada.")
     st.balloons()
     
     df_descarga = pd.DataFrame({"Tiempo [s]": vector_t, "Nivel [m]": h_log, "Caudal [m3/s]": u_log})
@@ -276,4 +294,5 @@ else:
         df_descarga.to_csv(index=False), 
         "resultados_simulacion_ucv.csv", 
         use_container_width=True
+    )
     )
