@@ -293,6 +293,5 @@ else:
         "📥 Descargar Datos del Ensayo (CSV)", 
         df_descarga.to_csv(index=False), 
         "resultados_simulacion_ucv.csv", 
-        use_container_width=True
-    )
-    )
+        use_container_width=True)
+    
