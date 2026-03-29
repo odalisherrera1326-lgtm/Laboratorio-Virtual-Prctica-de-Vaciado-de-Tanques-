@@ -65,7 +65,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # Encabezado Institucional: Escuela de Ingeniería Química
-col_l1, col_tit, col_l2 = st.columns([1, 5, 1.5])
+col_l1, col_tit, col_l2 = st.columns([1, 4.5, 1.5])
 
 def render_logo_institucional(ruta, nombre):
     if os.path.exists(ruta):
