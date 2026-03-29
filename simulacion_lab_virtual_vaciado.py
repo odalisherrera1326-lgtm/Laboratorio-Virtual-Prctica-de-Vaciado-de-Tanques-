@@ -69,7 +69,7 @@ col_l1, col_tit, col_l2 = st.columns([1, 4, 1])
 
 def render_logo_institucional(ruta, nombre):
     if os.path.exists(ruta):
-        st.image(ruta, width=200)
+        st.image(ruta, width=110)
     else:
         st.markdown(f"<div style='border:1px solid #ccc; padding:10px;'>{nombre}</div>", unsafe_allow_html=True)
 
@@ -77,7 +77,7 @@ with col_l1: render_logo_institucional("logo_ucv.png", "UCV")
 with col_tit:
     st.markdown("<h1>Unidad de Simulación: Operaciones Unitarias</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #5d6d7e;'>Escuela de Ingeniería Química | Facultad de Ingeniería - UCV</p>", unsafe_allow_html=True)
-with col_l2: render_logo_institucional("logo_quimica.png", "EIQ")
+with col_l2: render_logo_institucional("logo_quimica.png", "EIQ", ancho=180)
 
 st.markdown("---")
 
