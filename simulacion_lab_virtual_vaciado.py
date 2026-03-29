@@ -78,7 +78,7 @@ with col_l1:
     render_logo_institucional("logo_ucv.png", "UCV")
 
 with col_tit:
-    st.markdown("<h1>Unidad de Simulación: Operaciones Unitarias</h1>", unsafe_allow_html=True)
+    st.markdown("<h1>Práctica Virtual: Balance en estado no estacionario</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #5d6d7e;'>Escuela de Ingeniería Química | Facultad de Ingeniería - UCV</p>", unsafe_allow_html=True)
 
 with col_l2: 
