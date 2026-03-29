@@ -69,7 +69,7 @@ col_l1, col_tit, col_l2 = st.columns([1, 4, 1])
 
 def render_logo_institucional(ruta, nombre):
     if os.path.exists(ruta):
-        st.image(ruta, width=110)
+        st.image(ruta, width=200)
     else:
         st.markdown(f"<div style='border:1px solid #ccc; padding:10px;'>{nombre}</div>", unsafe_allow_html=True)
 
